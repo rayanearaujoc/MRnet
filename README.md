@@ -36,6 +36,10 @@ flowchart LR
     D --> E["5. Validação<br/>média das 3 AUCs"]
 ```
 
+## Código
+- [`preprocessamento/`](preprocessamento/): download e organização dos dados, preparo do sinal, *augmentation* e o `Dataset` usado no treino. Veja o [README da pasta](preprocessamento/README.md).
+- Os exames do MRNet não ficam no repositório. O acordo de uso da Stanford não permite redistribuí-los, e cada integrante acessa os dados pela própria conta no Redivis.
+
 ## Resultados
 - Gráficos
 - Tabelas
