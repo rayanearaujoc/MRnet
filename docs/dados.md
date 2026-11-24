@@ -30,17 +30,26 @@ dados/mrnet/
   a 1ª linha virou nome de coluna. Por isso as tabelas têm 1.129 e 119 linhas em vez de 1.130 e 120.
   Por exemplo, em `train_abnormal` as colunas se chamam `_0000` e `_1`, que é o exame 0000 com rótulo 1.
   O código recupera essa linha.
-- **Sem ID de paciente:** a versão pública só identifica o exame. Cada exame é tratado como um caso,
-  e o split é feito por exame.
-- **Validação oficial com mais casos positivos:** a validação tem 45% de LCA e 43% de menisco, contra 18% e 35% no treino.
-  É assim no dataset original. Por isso a métrica é a AUC, que não depende da proporção de positivos.
+  (Observado nas tabelas do Redivis e conferido depois da correção: 1.130 e 120 exames.)
+- **Sem ID de paciente:** as tabelas públicas só identificam o exame. Segundo a página oficial do MRNet,
+  o treino tem 1.130 exames de 1.088 pacientes, e todos os exames de um paciente ficaram no mesmo conjunto oficial.
+  Então a validação oficial não tem pacientes do treino. Dentro do treino, porém, cerca de 42 exames são de pacientes
+  repetidos, e o nosso split treino/ajuste (feito por exame) pode colocar o mesmo paciente nos dois lados.
+  É uma limitação pequena (~4% dos exames) e só afeta o ajuste de hiperparâmetros, não a avaliação final.
+- **Validação oficial com mais casos positivos:** no nosso download, a validação tem 45,0% de LCA e 43,3% de menisco,
+  contra 18,4% e 35,1% no treino. A pasta "valid" pública é o *tuning set* do artigo, montado com pelo menos
+  50 exames positivos de cada rótulo (conferir a frase exata na seção de métodos de Bien et al., 2018).
+  Por isso a métrica é a AUC, que não depende da proporção de positivos.
+
+Fontes: [página oficial do MRNet](https://stanfordmlgroup.github.io/competitions/mrnet/);
+Bien et al. (2018), *PLOS Medicine*, [PMC6258509](https://pmc.ncbi.nlm.nih.gov/articles/PMC6258509/).
 
 ## Split
 
 | Subconjunto | Exames | Uso |
 |---|---|---|
 | `treino` | ~904 | treinar o modelo (com augmentation) |
-| `ajuste` | ~226 | escolher hiperparâmetros (épocas, taxa de aprendizado, etc.) |
+| `ajuste` | ~226 | escolher hiperparâmetros (épocas, taxa de aprendizado, etc.); split por exame, ver limitação acima |
 | `valid_oficial` | 120 | só na avaliação final, para comparar com o MRNet original |
 
 Os 20% de ajuste são sorteados dentro do treino oficial, estratificados pela combinação dos 3 rótulos,
