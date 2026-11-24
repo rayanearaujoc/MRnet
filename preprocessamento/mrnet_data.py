@@ -1,10 +1,10 @@
 """
-mrnet_data.py: pré-processamento e Dataset do MRNet para ResNet50 + Bi-LSTM.
+mrnet_data.py: download, pré-processamento e Dataset do MRNet para ResNet50 + Bi-LSTM.
 
 Uso (no notebook do modelo):
-    import sys; sys.path.append("/content/drive/MyDrive/mrnet_code")
-    from mrnet_data import MRNetDataset, pos_weight
-    ds_tr = MRNetDataset(ROOT, exames, plano="sagittal", subset="treino", treino=True)
+    from mrnet_data import preparar_dados, MRNetDataset, pos_weight
+    exames = preparar_dados("/content/mrnet")   # baixa do Redivis se faltar (~10 min)
+    ds_tr = MRNetDataset("/content/mrnet", exames, plano="sagittal", subset="treino", treino=True)
     x, y = ds_tr[0]   # x: (fatias, 3, 224, 224) float32 | y: (3,) float32 [anormal, LCA, menisco]
 """
 import os
@@ -16,8 +16,130 @@ from torch.utils.data import Dataset
 from torchvision.transforms import v2
 
 TAREFAS = ["abnormal", "acl", "meniscus"]
+PLANOS = ["axial", "coronal", "sagittal"]
+N_EXAMES = {"train": 1130, "valid": 120}
 IMAGENET_MEDIA = [0.485, 0.456, 0.406]
 IMAGENET_DESVIO = [0.229, 0.224, 0.225]
+
+
+# ---------------------------------------------------------------------------
+# 0. Dados: download do Redivis, rótulos, tabela por exame e split
+# ---------------------------------------------------------------------------
+REDIVIS_ORG = "aimi"
+REDIVIS_DATASET = "mrnet_knee_mri_s"
+
+
+def _dataset_redivis():
+    import redivis
+    return redivis.organization(REDIVIS_ORG).dataset(REDIVIS_DATASET)
+
+
+def _baixar_arquivos(ds, root, split, workers=16):
+    """Baixa os .npy de um split para root/<split>/<plano>/<id>.npy. Pula os que já existem."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from tqdm.auto import tqdm
+
+    tabela = ds.table(split)
+    idx = tabela.to_pandas_dataframe()  # file_id, file_name, size, ...
+
+    def um(nome, tamanho):
+        destino = os.path.join(root, split, nome)
+        if os.path.exists(destino) and os.path.getsize(destino) == tamanho:
+            return
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        tabela.file(nome).download(destino, overwrite=True, progress=False)
+
+    erros = []
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futuros = {ex.submit(um, r["file_name"], int(r["size"])): r["file_name"]
+                   for _, r in idx.iterrows()}
+        for f in tqdm(as_completed(futuros), total=len(futuros), desc=f"download {split}"):
+            try:
+                f.result()
+            except Exception as e:  # noqa: BLE001
+                erros.append((futuros[f], e))
+    if erros:
+        print(f"{len(erros)} arquivos com erro em {split}. Ex.: {erros[0][0]}: {erros[0][1]}")
+        print("Rode preparar_dados() de novo: só os que faltam serão baixados.")
+
+
+def _carregar_rotulo(ds, split, tarefa):
+    """Os CSVs do MRNet não têm cabeçalho e, no Redivis, a 1ª linha virou nome de coluna
+    (ex.: colunas "_0000" e "_1" = exame 0000 com rótulo 1). Aqui ela é recuperada."""
+    df = ds.table(f"{split}_{tarefa}").to_pandas_dataframe()
+    col_id, col_rot = df.columns[:2]
+    df = df.rename(columns={col_id: "id", col_rot: tarefa})[["id", tarefa]]
+    if str(col_id).startswith("_"):
+        primeira = pd.DataFrame({"id": [str(col_id).lstrip("_")],
+                                 tarefa: [int(str(col_rot).lstrip("_"))]})
+        df = pd.concat([primeira, df], ignore_index=True)
+    df["id"] = df["id"].astype(int)
+    df[tarefa] = df[tarefa].astype(int)
+    assert len(df) == N_EXAMES[split], f"{split}_{tarefa}: {len(df)} linhas"
+    return df
+
+
+def _ids_ajuste(treino, frac=0.2, semente=42):
+    """Split estratificado pela combinação dos 3 rótulos, sempre igual (semente fixa)."""
+    rng = np.random.RandomState(semente)
+    combo = treino[TAREFAS].astype(str).agg("".join, axis=1)
+    escolhidos = []
+    for _, grupo in treino.groupby(combo, sort=True):
+        ids = np.sort(grupo["id"].to_numpy())
+        n = int(round(len(ids) * frac))
+        escolhidos.extend(rng.choice(ids, n, replace=False).tolist())
+    return set(escolhidos)
+
+
+def _arquivos_ok(root):
+    for split, n in N_EXAMES.items():
+        for plano in PLANOS:
+            pasta = os.path.join(root, split, plano)
+            if not os.path.isdir(pasta) or len([f for f in os.listdir(pasta) if f.endswith(".npy")]) != n:
+                return False
+    return True
+
+
+def preparar_dados(root="/content/mrnet"):
+    """Deixa tudo pronto em `root` e devolve o DataFrame de exames.
+
+    1. Baixa os 3.750 .npy do Redivis (só os que faltam; ~10 min na 1ª vez).
+    2. Monta os rótulos (corrigindo a linha perdida).
+    3. Cria a tabela por exame (rótulos + nº de fatias) e o split treino/ajuste/valid_oficial.
+    Salva `exames.csv` e `split.csv` em `root`.
+    """
+    csv = os.path.join(root, "exames.csv")
+    if os.path.exists(csv) and _arquivos_ok(root):
+        print("Dados já prontos em", root)
+        return pd.read_csv(csv)
+
+    ds = _dataset_redivis()
+    for split in N_EXAMES:
+        _baixar_arquivos(ds, root, split)
+    if not _arquivos_ok(root):
+        raise RuntimeError("Download incompleto. Rode preparar_dados() de novo.")
+
+    linhas = []
+    for split in N_EXAMES:
+        rot = None
+        for tarefa in TAREFAS:
+            r = _carregar_rotulo(ds, split, tarefa)
+            rot = r if rot is None else rot.merge(r, on="id", how="inner")
+        for _, r in rot.iterrows():
+            lin = {"id": int(r["id"]), "split": split, **{t: int(r[t]) for t in TAREFAS}}
+            for plano in PLANOS:
+                arr = np.load(os.path.join(root, split, plano, f"{lin['id']:04d}.npy"), mmap_mode="r")
+                lin[f"fatias_{plano}"] = int(arr.shape[0])
+            linhas.append(lin)
+    exames = pd.DataFrame(linhas)
+
+    ajuste = _ids_ajuste(exames[exames["split"] == "train"])
+    exames["subset"] = np.where(exames["split"] == "valid", "valid_oficial",
+                                np.where(exames["id"].isin(ajuste), "ajuste", "treino"))
+    exames.to_csv(csv, index=False)
+    exames[["id", "split", "subset"]].to_csv(os.path.join(root, "split.csv"), index=False)
+    print("Pronto:", exames["subset"].value_counts().to_dict())
+    return exames
 
 
 # ---------------------------------------------------------------------------
