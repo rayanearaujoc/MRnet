@@ -1,0 +1,23 @@
+# Dados do MRNet: não versionar (acordo de uso da Stanford e 7,7 GB)
+*.npy
+*.tar
+*.zip
+mrnet/
+data/
+dados/
+exames.csv
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Credenciais (o .env.example pode ir)
+.env
+!.env.example
+*token*
+
+# Ambiente virtual e editor
+.venv/
+venv/
+.vscode/
