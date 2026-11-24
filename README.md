@@ -37,8 +37,128 @@ flowchart LR
 ```
 
 ## Código
-- [`preprocessamento/`](preprocessamento/): download e organização dos dados, preparo do sinal, *augmentation* e o `Dataset` usado no treino. Veja o [README da pasta](preprocessamento/README.md).
-- Os exames do MRNet não ficam no repositório. O acordo de uso da Stanford não permite redistribuí-los, e cada integrante acessa os dados pela própria conta no Redivis.
+
+```
+MRnet/
+├── mrnet_dados/              # pacote Python com tudo da parte de dados
+│   ├── config.py             # constantes e leitura do .env
+│   ├── download.py           # download do Redivis, rótulos e split
+│   ├── sinal.py              # preparar o sinal: normalização, filtro, CLAHE, nº de fatias, augmentation
+│   └── dataset.py            # MRNetDataset (PyTorch) e pos_weight
+├── scripts/
+│   ├── baixar_dados.py           # 1. baixa e organiza os dados
+│   ├── analise_exploratoria.py   # 2. gera tabelas e figuras para o relatório
+│   └── verificar_dataset.py      # 3. confere o que o modelo vai receber
+├── docs/dados.md             # decisões e cuidados com os dados
+├── resultados/               # tabelas e figuras geradas pelos scripts
+├── dados/                    # os exames (criada pelo download, fora do Git)
+├── requirements.txt
+└── .env.example              # modelo do arquivo com o token do Redivis
+```
+
+As decisões sobre os dados (split, normalização, augmentation, problemas encontrados) estão em [`docs/dados.md`](docs/dados.md).
+
+## Como rodar
+
+### 1. Preparar o ambiente (uma vez só)
+
+Você precisa de **Python 3.10 ou mais novo**, **Git** e do **VS Code** com a extensão *Python* (da Microsoft).
+
+No terminal (no VS Code: menu *Terminal > Novo Terminal*):
+
+```bash
+git clone https://github.com/rayanearaujoc/MRnet.git
+cd MRnet
+python -m venv .venv
+```
+
+Ative o ambiente virtual:
+
+```bash
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+# Mac / Linux
+source .venv/bin/activate
+```
+
+No PowerShell, se aparecer um erro de "execução de scripts desabilitada", rode uma vez
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` e ative de novo.
+
+Instale as dependências:
+
+```bash
+# Só se o computador tiver GPU NVIDIA: antes, instale o PyTorch com CUDA pelo comando de
+# https://pytorch.org/get-started/locally/ (ex.: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124)
+pip install -r requirements.txt
+```
+
+No VS Code, abra a pasta `MRnet` (*Arquivo > Abrir Pasta*), aperte `Ctrl+Shift+P`, digite
+**Python: Select Interpreter** e escolha o que tem `.venv` no caminho.
+
+### 2. Configurar o token do Redivis
+
+O download usa uma conta do Redivis com acesso aprovado ao MRNet.
+
+1. Copie o arquivo `.env.example` e renomeie a cópia para `.env`, na mesma pasta.
+2. Abra o `.env` e cole o token depois de `REDIVIS_API_TOKEN=`, sem aspas e sem espaços.
+
+O `.env` está no `.gitignore` e **nunca** vai para o GitHub. Não cole o token em nenhum outro arquivo.
+Para guardar os dados em outro disco, preencha também `MRNET_ROOT` (por exemplo, `MRNET_ROOT=D:/dados/mrnet`).
+
+### 3. Rodar os scripts (na pasta `MRnet`, com o `.venv` ativado)
+
+```bash
+python scripts/baixar_dados.py
+```
+Baixa os 3.750 exames (7,7 GB) para `dados/mrnet/` e cria o `exames.csv` com os rótulos e o split.
+Leva de 10 a 30 min, dependendo da internet. **Se cair, rode de novo**: ele baixa só o que falta.
+Depois de baixar, o token não é mais necessário.
+
+```bash
+python scripts/analise_exploratoria.py
+```
+Gera em `resultados/` as tabelas (prevalência dos rótulos, nº de fatias) e as figuras
+(exame de exemplo, distribuição de fatias, normalização, etapas do sinal, augmentation).
+
+```bash
+python scripts/verificar_dataset.py
+```
+Mostra o formato que o modelo recebe, o tempo por batch, os pesos das classes e se há GPU.
+Opções: `--plano coronal`, `--batch 2`, `--n-fatias 0` (nº original de fatias, com `--batch 1`).
+Todos os scripts aceitam `--help`.
+
+### 4. Usar os dados no modelo
+
+Em qualquer script dentro do repositório:
+
+```python
+import torch
+from torch.utils.data import DataLoader
+from mrnet_dados import carregar_exames, MRNetDataset, pos_weight
+
+exames = carregar_exames()   # lê dados/mrnet/exames.csv
+
+ds_treino = MRNetDataset(exames, "sagittal", "treino", treino=True)   # com augmentation
+ds_ajuste = MRNetDataset(exames, "sagittal", "ajuste")                # ajuste de hiperparâmetros
+ds_valid  = MRNetDataset(exames, "sagittal", "valid_oficial")         # só na avaliação final
+
+dl_treino = DataLoader(ds_treino, batch_size=4, shuffle=True, num_workers=2)
+
+for x, y in dl_treino:
+    # x: (batch, 32, 3, 224, 224)  -> 32 fatias, cada uma pronta para a ResNet50
+    # y: (batch, 3)                -> [anormal, LCA, menisco]
+    ...
+
+loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight(exames))
+```
+
+Na ResNet50, junte batch e fatias para extrair as features de cada fatia e depois separe de novo para a Bi-LSTM:
+`x.view(-1, 3, 224, 224)` → ResNet50 → `(batch * 32, 2048)` → `.view(batch, 32, 2048)` → Bi-LSTM.
+
+No Windows, com `num_workers > 0`, o código de treino precisa ficar dentro de `if __name__ == "__main__":`. Sem isso, o DataLoader trava.
+
+Se o script do modelo ficar numa subpasta (por exemplo, `modelo/treinar.py`), rode da raiz como módulo:
+`python -m modelo.treinar`.
 
 ## Resultados
 - Gráficos
