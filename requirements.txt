@@ -8,6 +8,9 @@ matplotlib
 tqdm
 python-dotenv
 
+# Treinamento (métricas)
+scikit-learn
+
 # PyTorch: em computador com GPU NVIDIA, instale torch/torchvision pelo comando
 # de https://pytorch.org/get-started/locally/ ANTES de rodar este arquivo
 torch

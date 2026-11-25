@@ -1,0 +1,9 @@
+conjunto,tarefa,acuracia,f1,auc
+treino,anormal,0.677,0.7534,0.8858
+treino,LCA,0.8407,0.5714,0.8638
+treino,menisco,0.7544,0.6396,0.8278
+treino,média,0.7574,0.6548,0.8592
+ajuste,anormal,0.6283,0.7063,0.891
+ajuste,LCA,0.7965,0.4103,0.7864
+ajuste,menisco,0.7699,0.6389,0.778
+ajuste,média,0.7316,0.5851,0.8184

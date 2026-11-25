@@ -7,6 +7,10 @@ data/
 dados/
 exames.csv
 
+# Pesos dos modelos treinados (~100 MB cada)
+*.pt
+*.pth
+
 # Python / Jupyter
 __pycache__/
 *.pyc

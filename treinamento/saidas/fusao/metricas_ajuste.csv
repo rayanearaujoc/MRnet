@@ -1,0 +1,17 @@
+modelo,tarefa,acuracia,f1,auc
+sagittal,anormal,0.6283,0.7063,0.891
+sagittal,LCA,0.7965,0.4103,0.7864
+sagittal,menisco,0.7699,0.6389,0.778
+sagittal,média,0.7316,0.5851,0.8184
+coronal,anormal,0.7611,0.8312,0.8734
+coronal,LCA,0.823,0.375,0.7763
+coronal,menisco,0.7035,0.5379,0.7157
+coronal,média,0.7625,0.5814,0.7885
+axial,anormal,0.7434,0.8153,0.8912
+axial,LCA,0.8274,0.4179,0.8313
+axial,menisco,0.7124,0.5113,0.7495
+axial,média,0.7611,0.5815,0.824
+fusão (validação cruzada),anormal,0.8673,0.9202,0.9018
+fusão (validação cruzada),LCA,0.8319,0.4242,0.8398
+fusão (validação cruzada),menisco,0.7478,0.6069,0.767
+fusão (validação cruzada),média,0.8156,0.6505,0.8362
