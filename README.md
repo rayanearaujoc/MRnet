@@ -10,9 +10,9 @@ Classificação automática de ressonância do joelho com o MRNet
 202504025 - Thwaverton Oliveira Martins
 
 ## Apresentações
-1. Link para a primeira apresentação (canva, google slides, etc.) <br>
-2. Link para a segunda apresentação (canva, google slides, etc.) <br>
-...
+1. https://canva.link/2qlupad4rcfk3ej <br>
+2. https://canva.link/qpgufn3wcm55w9u <br>
+3. Link para a apresentação <br>
 
 ## Resumo
 A ressonância magnética (RM) é o exame de referência para lesões de joelho, mas cada exame tem dezenas de imagens em três planos, e a leitura manual é demorada e depende da experiência do radiologista. Redes neurais vêm mostrando bom desempenho como apoio a esse diagnóstico, e o dataset público MRNet, da Universidade de Stanford, tornou-se uma referência para comparar métodos. Este projeto segue a proposta da competição MRNet: indicar, para cada exame, se ele é anormal e se há ruptura do ligamento cruzado anterior (LCA) ou do menisco. Cada corte da RM é preparado como um sinal (normalização, filtragem e realce de contraste) e passa por uma ResNet pré-treinada no ImageNet, que extrai as características de cada fatia. Uma LSTM bidirecional relaciona as fatias de cada plano, e uma regressão logística combina os planos axial, coronal e sagital. O modelo é avaliado nos 120 exames da validação oficial pela métrica da competição, a média das AUCs das três tarefas. Espera-se um desempenho próximo ao do MRNet original (AUC média de 0,916), com melhor resultado para anormalidade e LCA do que para menisco. Também se espera identificar qual plano contribui mais para cada tarefa. O projeto deve mostrar que um modelo moderno, treinado em hardware acessível, pode servir de apoio à triagem de exames de joelho.
